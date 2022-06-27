@@ -40,27 +40,18 @@ class newcourses_helper {
 
         $teacher=array($teacherid);
 
-        $sql = "SELECT mctx.instanceid
-                from mdl_role_assignments mra, mdl_context mctx, mdl_course mc, mdl_course_categories mcc 
-                where mra.contextid = mctx.id 
-                and mra.userid = $teacher[0]  
-                and mra.roleid = 12 
-                and mc.id = mctx.instanceid 
-                and mc.category = mcc.id 
-                and mcc.visible = 1 
-                and mc.visible = 1
-                and (now()::date - to_timestamp(mra.timemodified)::date) < 30
-                except
-                select distinct courseid
-                FROM public.mdl_logstore_standard_log
-                where 
-                action = 'viewed' and 
-                target = 'course' and 
-                userid = 211 and
-                courseid in(select mctx.instanceid
-                from mdl_role_assignments mra, mdl_context mctx, mdl_course mc, mdl_course_categories mcc 
-                where mra.contextid = mctx.id and mra.userid = $teacher[0] and mra.roleid = 12 and mc.id = mctx.instanceid and mc.category = mcc.id and mcc.visible = 1 and mc.visible = 1
-                and (now()::date - to_timestamp(mra.timemodified)::date) < 30)";
+        $sql = "SELECT mc.id
+                from mdl_course mc 
+                inner join mdl_context mctx on mctx.instanceid = mc.id 
+                inner join mdl_role_assignments mra on mra.contextid = mctx.id and mra.userid = $teacher[0] and mra.roleid = 12 and (now()::date - to_timestamp(mra.timemodified)::date) < 365
+                inner join mdl_course_categories mcc on mc.category = mcc.id and mcc.visible = 1
+                where mc.visible = 1
+                except 
+                select distinct mul.courseid 
+                from mdl_user_lastaccess mul 
+                inner join mdl_role_assignments mra on mra.userid = mul.userid and mul.userid = $teacher[0] and mra.roleid = 12 
+                inner join mdl_context mctx on mctx.id = mra.contextid and mctx.instanceid = mul.courseid
+                where (now()::date - to_timestamp(mul.timeaccess)::date) < 365";
 
         $courses=$DB->get_fieldset_sql($sql, $teacher);
         return $courses;
@@ -71,36 +62,21 @@ class newcourses_helper {
 
         $teacher=array($teacherid);
 
-        $sql = "SELECT count(*)
-                from(
-                select distinct mctx.instanceid
-                from mdl_role_assignments mra, mdl_context mctx, mdl_course mc, mdl_course_categories mcc 
-                where mra.contextid = mctx.id 
-                and mra.userid = $teacher[0] 
-                and mra.roleid = 12 
-                and mc.id = mctx.instanceid 
-                and mc.category = mcc.id 
-                and mcc.visible = 1 
-                and mc.visible = 1
-                and (now()::date - to_timestamp(mra.timemodified)::date) < 30
-                except
-                select distinct courseid
-                FROM public.mdl_logstore_standard_log
-                where 
-                action = 'viewed' and 
-                target = 'course' and 
-                userid = 211 and
-                courseid in(select mctx.instanceid
-                from mdl_role_assignments mra, mdl_context mctx, mdl_course mc, mdl_course_categories mcc 
-                where mra.contextid = mctx.id 
-                and mra.userid = $teacher[0] 
-                and mra.roleid = 12 
-                and mc.id = mctx.instanceid 
-                and mc.category = mcc.id 
-                and mcc.visible = 1 
-                and mc.visible = 1
-                and (now()::date - to_timestamp(mra.timemodified)::date) < 30)) foo";
-        
+        $sql = "SELECT count(*) from
+                ((select mc.id
+                from mdl_course mc 
+                inner join mdl_context mctx on mctx.instanceid = mc.id 
+                inner join mdl_role_assignments mra on mra.contextid = mctx.id and mra.userid = $teacher[0] and mra.roleid = 12 and (now()::date - to_timestamp(mra.timemodified)::date) < 365
+                inner join mdl_course_categories mcc on mc.category = mcc.id and mcc.visible = 1
+                where mc.visible = 1)
+                except 
+                (select distinct mul.courseid 
+                from mdl_user_lastaccess mul 
+                inner join mdl_role_assignments mra on mra.userid = mul.userid and mul.userid = $teacher[0] and mra.roleid = 12 
+                inner join mdl_context mctx on mctx.id = mra.contextid and mctx.instanceid = mul.courseid
+                where (now()::date - to_timestamp(mul.timeaccess)::date) < 365)) as temptable";
+
+
         $courses_count=$DB->count_records_sql($sql, $teacher);
         return $courses_count;
     }
